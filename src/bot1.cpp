@@ -42,7 +42,7 @@ double piece_advantage(Board *b)
     double white_score = 0;
     double black_score = 0;
 
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < b->data.n_pieces; i++)
     {
         if (pieces[i] == DEAD)
         {
@@ -54,7 +54,7 @@ double piece_advantage(Board *b)
         black_score += tmp;
     }
 
-    for (int i = 10; i < 20; i++)
+    for (int i = b->data.n_pieces; i < 2 * b->data.n_pieces; i++)
     {
         if (pieces[i] == DEAD)
         {
@@ -215,7 +215,7 @@ void Engine::find_best_move(const Board &b)
             std::cout << this->best_move << " " << maxD << std::endl;
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            if (duration.count() > 2000)
+            if (duration.count() > 1000)
             {
                 search = false;
             }
