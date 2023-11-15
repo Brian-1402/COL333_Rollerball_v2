@@ -1,29 +1,28 @@
 ## Tasks
 
-- Material checking update
-- Distance checking
-- Range of movement (simple)
 - Re-assess weights
 
 ## Bugs
 
-- Undo move seems to undo the move but not undo the killing of a piece, and hence messing up the minimax search.
+- that weird heap buffer overflow in a specific game between depth 5 vs depth 4, when sorting moveset is activated.
 
 ## Evaluation function
 
 Ideas:
 
-- Material checking (update for pawn upgrade)
-- Checkmate (done)
 - Distance checking
-- Search evals
+- Search evals *(too computationally expensive)*
   (i.e. requires get_legal_moves() which is the computation of one extra depth of search)
-  - Threat range (already sort of handled by material checking)
   - Range of movement (basically branching factor number)
+    - can be called only for specific moves like rook move or knight move, to saev on get_legal_move() calls.
 
-### Material checking
+- iterative deepening:
+  - with storage of tree traversals
+  - orders nodes using previously computed eval functions (cheaper than regular ordering since do_move() need not be called again for getting eval)
 
-- Replace array with if statements for each piece and their piece id.
+- Store tree traversals across game moves (storing in .hpp)
+
+- Do ML for calculating weights.
 
 ### Distance checking
 
@@ -45,6 +44,4 @@ Ideas:
 - (if we get time)
 - Will require a new data structure which gets updated with every move, amortising any high time complexities.
 
-## Extras
 
-- Implement single function Minimax function like in the YT video. Will make the code more readable.

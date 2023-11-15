@@ -10,7 +10,7 @@ rollerball:
 	$(CC) $(CFLAGS) $(INCLUDES) $(SRC) src/engine.cpp -lpthread -o bin/rollerball
 	./bin/rollerball -p 8181
 
-rollerball_debug:
+rollerball_mem_debug:
 	mkdir -p bin
 	clang++ -fsanitize=address -O1 -fno-omit-frame-pointer -g -DASIO_STANDALONE $(INCLUDES) $(SRC) src/engine.cpp -lpthread -o bin/rollerball_debug
 	./bin/rollerball_debug -p 8181

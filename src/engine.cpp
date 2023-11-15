@@ -18,7 +18,7 @@
 typedef uint8_t U8;
 typedef uint16_t U16;
 
-int global_cutoff = 5;
+int global_cutoff = 6;
 std::vector<std::string> moves_taken;
 std::vector<U8> last_killed_pieces;
 std::vector<int> last_killed_pieces_idx;
@@ -172,45 +172,45 @@ float check_condition(Board *b)
 }
 
 // Calculates how ranges covered + threats given
-float range_and_threats(Board *b, std::unordered_set<U16> moves, float range_weight, float threat_weight)
+float range_check(Board *b)
 {
     bool player = (b->data.player_to_play == WHITE);
     float val = 0;
-    float p = 2, bi = 4, r = 6;
-    U8 *pieces = (U8 *)(&(b->data));
+    // float p = 2, bi = 4, r = 6;
+    // U8 *pieces = (U8 *)(&(b->data));
 
-    b->data.player_to_play = (PlayerColor)(b->data.player_to_play ^ (WHITE | BLACK)); // flipping player
-    std::unordered_set<U16> moves_flip = b->get_legal_moves();
-    b->data.player_to_play = (PlayerColor)(b->data.player_to_play ^ (WHITE | BLACK)); // flipping player back so as to not interfere with remaining processes
+    // b->data.player_to_play = (PlayerColor)(b->data.player_to_play ^ (WHITE | BLACK)); // flipping player
+    std::unordered_set<U16> moves = b->get_legal_moves();
+    // b->data.player_to_play = (PlayerColor)(b->data.player_to_play ^ (WHITE | BLACK)); // flipping player back so as to not interfere with remaining processes
 
     // moves = (player == 1) ? moves : moves_flip; //White's moves
     // moves_flip = (player == 0) ? moves : moves_flip; //Black's moves
 
-    val += range_weight * (moves_flip.size() - moves.size()) * pow(-1, player); // Calculates range (always white - black)
+    val += (moves.size()) * pow(-1, player); // Calculates range (always white - black)
 
     /*Taking union -> Note: we dont need to care about coinciding positions because if there existed coinciding
     positions it implies there was no oponent piece in that square in first place */
-    moves.insert(moves_flip.begin(), moves_flip.end());
+    // moves.insert(moves_flip.begin(), moves_flip.end());
 
-    // Calculating threats
-    for (auto m : moves)
-    {
-        U8 p1 = getp1(m);
-        for (int i = 0; i < 12; i++)
-        {
-            int temp = 0;
-            if (pieces[i] == p1)
-            {
-                // val += (((int(i >= 6) - int(i < 6))) * weight_arr[i])* (pieces[i] != DEAD);
-                U8 piecetype = b->data.board_0[pieces[i]];
-                temp += ((piecetype & PAWN) == PAWN) * p;
-                temp += ((piecetype & BISHOP) == BISHOP) * bi;
-                temp += ((piecetype & ROOK) == ROOK) * r;
-                temp *= std::pow(-1, (piecetype & BLACK) == BLACK);
-            }
-            val += temp * threat_weight;
-        }
-    }
+    // // Calculating threats
+    // for (auto m : moves)
+    // {
+    //     U8 p1 = getp1(m);
+    //     for (int i = 0; i < 12; i++)
+    //     {
+    //         int temp = 0;
+    //         if (pieces[i] == p1)
+    //         {
+    //             // val += (((int(i >= 6) - int(i < 6))) * weight_arr[i])* (pieces[i] != DEAD);
+    //             U8 piecetype = b->data.board_0[pieces[i]];
+    //             temp += ((piecetype & PAWN) == PAWN) * p;
+    //             temp += ((piecetype & BISHOP) == BISHOP) * bi;
+    //             temp += ((piecetype & ROOK) == ROOK) * r;
+    //             temp *= std::pow(-1, (piecetype & BLACK) == BLACK);
+    //         }
+    //         val += temp * threat_weight;
+    //     }
+    // }
     return val;
 }
 
@@ -319,6 +319,7 @@ float eval_fn(Board *b)
     float final_val = 0;
     final_val += 1 * material_check(b);
     final_val += 1 * check_condition(b);
+    // final_val += 0.1 * range_check(b);
     // final_val += 0.01 * pawn_distance(b);
     // final_val += 0.02 * rook_distance(b);
     return final_val;
@@ -353,37 +354,52 @@ void print_moveset(std::unordered_set<U16> moveset)
 }
 
 U16 best_move_obtained = 0;
+int minimax_count = 0;
+auto start = std::chrono::high_resolution_clock::now();
+
+auto end = std::chrono::high_resolution_clock::now();
+std::chrono::milliseconds get_legal_moves_duration(0);
+std::chrono::milliseconds eval_duration(0);
 
 float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
 {
+    minimax_count++;
     // std::cout << cutoff << std::endl;
     // bool is_sorted = false;
     if (cutoff == 0)
     {
+        auto start = std::chrono::high_resolution_clock::now();
         return eval_fn(b);
+        auto end = std::chrono::high_resolution_clock::now();
+        eval_duration += std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     }
+
+    auto start = std::chrono::high_resolution_clock::now();
     std::unordered_set<U16> moveset = b->get_legal_moves();
+    auto end = std::chrono::high_resolution_clock::now();
+    get_legal_moves_duration += std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     if (moveset.size() == 0)
     {
         return eval_fn(b);
     }
     // Ordering the values using lambda function:
-    std::vector<U16> ordered_moveset(moveset.begin(), moveset.end());
+    // std::vector<U16> ordered_moveset(moveset.begin(), moveset.end());
 
-    auto order_moves = [b](U16 move1, U16 move2)
-    {
-        do_move(b, move1);
-        float val1 = eval_fn(b);
-        undo_last_move(b, move1);
+    // auto order_moves = [b](U16 move1, U16 move2)
+    // {
+    //     do_move(b, move1);
+    //     float val1 = eval_fn(b);
+    //     undo_last_move(b, move1);
 
-        do_move(b, move2);
-        float val2 = eval_fn(b);
-        undo_last_move(b, move2);
+    //     do_move(b, move2);
+    //     float val2 = eval_fn(b);
+    //     undo_last_move(b, move2);
 
-        return val1 > val2;
-    };
+    //     return val1 > val2;
+    // };
 
-    std::sort(ordered_moveset.begin(), ordered_moveset.end(), order_moves); // Sorted in descending order
+    // std::sort(ordered_moveset.begin(), ordered_moveset.end(), order_moves); // Sorted in descending order
 
     // print_moveset(moveset);
     // std::cout << "\nOrdered Moveset->\n\n";
@@ -414,7 +430,7 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
     }
     else
     {
-        std::reverse(ordered_moveset.begin(), ordered_moveset.end());
+        // std::reverse(ordered_moveset.begin(), ordered_moveset.end());
 
         float min_eval = std::numeric_limits<float>::max();
         for (auto m : moveset)
@@ -458,11 +474,18 @@ void Engine::find_best_move(const Board &b)
         // std::cout << std::endl;
         Board *b_copy = new Board(b);
 
-        auto start = std::chrono::high_resolution_clock::now();
         print_moveset(moveset);
+        minimax_count = 0;
+
+        auto start = std::chrono::high_resolution_clock::now();
         minimax(b_copy, global_cutoff, std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), b.data.player_to_play == WHITE);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::milliseconds duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        std::cout << "Time taken: " << duration.count() << "ms" << std::endl;
+        std::cout << "get_legal_moves() time taken: " << get_legal_moves_duration.count() << "ms" << std::endl;
+        std::cout << "eval_fn() time taken: " << eval_duration.count() << "ms" << std::endl;
+        std::cout << "Minimax calls: " << minimax_count << std::endl;
 
         // if (duration.count() < 2000)
         this->best_move = best_move_obtained;
