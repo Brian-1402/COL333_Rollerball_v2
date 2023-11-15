@@ -18,7 +18,7 @@
 typedef uint8_t U8;
 typedef uint16_t U16;
 
-int global_cutoff = 6;
+int global_cutoff = 5;
 std::vector<std::string> moves_taken;
 std::vector<U8> last_killed_pieces;
 std::vector<int> last_killed_pieces_idx;
@@ -402,6 +402,7 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
             if (cutoff == global_cutoff && eval > alpha)
             {
                 best_move_obtained = m;
+                std::cout << "New best move chosen:" << move_to_str(m) << ", score: " << eval << std::endl;
             }
             alpha = std::max(alpha, eval);
             if (alpha >= beta)

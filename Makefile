@@ -8,18 +8,29 @@ SRC=src/server.cpp src/board.cpp src/butils.cpp src/bdata.cpp src/uciws.cpp src/
 rollerball:
 	mkdir -p bin
 	$(CC) $(CFLAGS) $(INCLUDES) $(SRC) src/engine.cpp -lpthread -o bin/rollerball
+	./bin/rollerball -p 8181
+
+rollerball_debug:
+	mkdir -p bin
+	clang++ -fsanitize=address -O1 -fno-omit-frame-pointer -g -DASIO_STANDALONE $(INCLUDES) $(SRC) src/engine.cpp -lpthread -o bin/rollerball_debug
+	./bin/rollerball_debug -p 8181
+
+
 
 bot1:
 	mkdir -p bin
 	$(CC) $(CFLAGS) $(INCLUDES) $(SRC) src/bot1.cpp -lpthread -o bin/bot1
+	./bin/bot1 -p 8182
 
 bot2:
 	mkdir -p bin
 	$(CC) $(CFLAGS) $(INCLUDES) $(SRC) src/bot2.cpp -lpthread -o bin/bot2
+	./bin/bot2 -p 8182
 
 bot3:
 	mkdir -p bin
 	$(CC) $(CFLAGS) $(INCLUDES) $(SRC) src/bot3.cpp -lpthread -o bin/bot3
+	./bin/bot3 -p 8182
 
 package:
 	mkdir -p build 
