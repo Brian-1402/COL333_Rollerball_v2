@@ -1,6 +1,6 @@
 CC=g++
 CFLAGS=-Wall -std=c++17 -O3 -funroll-loops -DASIO_STANDALONE
-
+ASANFLAGS=-fsanitize=address -fno-omit-frame-pointer -g -Wall -std=c++17 -O3 -funroll-loops -DASIO_STANDALONE
 INCLUDES=-Iinclude
 
 SRC=src/server.cpp src/board.cpp src/butils.cpp src/bdata.cpp src/uciws.cpp src/rollerball.cpp
@@ -8,12 +8,12 @@ SRC=src/server.cpp src/board.cpp src/butils.cpp src/bdata.cpp src/uciws.cpp src/
 rollerball:
 	mkdir -p bin
 	$(CC) $(CFLAGS) $(INCLUDES) $(SRC) src/engine.cpp -lpthread -o bin/rollerball
-	./bin/rollerball -p 8181
+	# ./bin/rollerball -p 8181
 
-rollerball_mem_debug:
+rollerball_m:
 	mkdir -p bin
-	clang++ -fsanitize=address -O3 -fno-omit-frame-pointer -g -DASIO_STANDALONE $(INCLUDES) $(SRC) src/engine.cpp -lpthread -o bin/rollerball_debug
-	./bin/rollerball_m -p 8181
+	clang++ $(ASANFLAGS) $(INCLUDES) $(SRC) src/engine.cpp -lpthread -o bin/rollerball_m
+	# ./bin/rollerball_m -p 8181
 
 
 
