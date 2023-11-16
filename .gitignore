@@ -38,6 +38,7 @@
 # Virtual environments
 env/
 venv/
+debugging/
 
 bin/
 .stignore
