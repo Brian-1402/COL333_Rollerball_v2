@@ -6,6 +6,7 @@
 #include "board.hpp"
 #include "engine.hpp"
 #include "butils.hpp"
+#include "bdata.hpp"
 
 #include <algorithm>
 #include <random>
@@ -13,12 +14,16 @@
 #include <limits>
 #include <chrono>
 #include <bitset>
+#include <unordered_map>
+#include <unordered_set>
+#include <tuple>
 #include <math.h>
 
 typedef uint8_t U8;
 typedef uint16_t U16;
 
-int global_cutoff = 6;
+int max_depth=5;
+std::unordered_map<std::string,std::tuple<std::unordered_set<U16>,std::vector<BoardData>,float>> move_histories; // dictionary storing the present state (board_0 in its string format) and its corresponding moves, board states after moves, and the score of the board state
 std::vector<std::string> moves_taken;
 std::vector<U8> last_killed_pieces;
 std::vector<int> last_killed_pieces_idx;
@@ -325,7 +330,7 @@ float eval_fn(Board *b)
     return final_val;
 }
 
-void print_state(Board *b, U16 move, int cutoff)
+void print_state(Board *b, U16 move, int cutoff, int global_cutoff)
 {
     std::cout << "Present board state:" << std::endl;
     std::cout << all_boards_to_str(*b) << std::endl;
@@ -355,13 +360,10 @@ void print_moveset(std::unordered_set<U16> moveset)
 
 U16 best_move_obtained = 0;
 int minimax_count = 0;
-auto start = std::chrono::high_resolution_clock::now();
-
-auto end = std::chrono::high_resolution_clock::now();
 std::chrono::milliseconds get_legal_moves_duration(0);
 std::chrono::milliseconds eval_duration(0);
 
-float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
+float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, int global_cutoff)
 {
     minimax_count++;
     // std::cout << cutoff << std::endl;
@@ -369,15 +371,33 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
     if (cutoff == 0)
     {
         auto start = std::chrono::high_resolution_clock::now();
-        return eval_fn(b);
+        float val = eval_fn(b);
         auto end = std::chrono::high_resolution_clock::now();
         eval_duration += std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        return val;
     }
 
-    auto start = std::chrono::high_resolution_clock::now();
-    std::unordered_set<U16> moveset = b->get_legal_moves();
-    auto end = std::chrono::high_resolution_clock::now();
-    get_legal_moves_duration += std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::unordered_set<U16> moveset;
+    bool in_move_hist = false;
+    std::string board_string = board_to_str(&(b->data));
+
+    // ! Check whether this condition is right
+    // NOTE: global_cutoff - cutoff gives the present depth of search 
+    if (move_histories.find(board_string) != move_histories.end()){ // * Board state already in dictionary
+        moveset = std::get<0>(move_histories[board_string]);
+        in_move_hist = true;
+    }
+    else{
+        auto start = std::chrono::high_resolution_clock::now();
+        moveset = b->get_legal_moves();
+        auto end = std::chrono::high_resolution_clock::now();
+        get_legal_moves_duration += std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        if (global_cutoff - cutoff < max_depth){ // * Only store the moveset if the depth is less than the max_depth (to avoid overflow of memory)
+            std::vector<BoardData> board_states;
+            move_histories[board_string] = std::make_tuple(moveset,board_states,0.0f);
+        }
+    }
+
 
     if (moveset.size() == 0)
     {
@@ -407,13 +427,30 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
     // std::cout << "\n";
 
     if (Maximizing)
-    {
+    {   
+        int ind = 0;
         float max_eval = std::numeric_limits<float>::lowest();
         for (auto m : moveset)
         {
-            do_move(b, m);
-            float eval = minimax(b, cutoff - 1, alpha, beta, false);
-            undo_last_move(b, m);
+            BoardData present_data;
+            // if (in_move_hist){
+            //     present_data = b->data;
+            //     b->data = std::get<1>(move_histories[board_string])[ind];
+            //     ind++;
+            // }
+            // else{
+                do_move(b, m);
+                if (global_cutoff - cutoff < max_depth){
+                    std::get<1>(move_histories[board_string]).push_back(b->data);
+                }
+            // }
+            float eval = minimax(b, cutoff - 1, alpha, beta, false,global_cutoff);
+            // if (in_move_hist){
+            //     b->data = present_data;
+            // }
+            // else{
+                undo_last_move(b, m);
+            // }
             max_eval = std::max(max_eval, eval);
             if (cutoff == global_cutoff && eval > alpha)
             {
@@ -426,6 +463,9 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
                 break;
             }
         }
+        if (global_cutoff-cutoff < max_depth){
+            std::get<2>(move_histories[board_string]) = max_eval;
+        }
         return max_eval;
     }
     else
@@ -433,11 +473,29 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
         // std::reverse(ordered_moveset.begin(), ordered_moveset.end());
 
         float min_eval = std::numeric_limits<float>::max();
+        int ind = 0;
         for (auto m : moveset)
         {
-            do_move(b, m);
-            float eval = minimax(b, cutoff - 1, alpha, beta, true);
-            undo_last_move(b, m);
+            BoardData present_data;
+            // if (in_move_hist){
+            //     present_data = b->data;
+            //     b->data = std::get<1>(move_histories[board_string])[ind];
+            //     ind++;
+            // }
+            // else{
+                do_move(b, m);
+                if (global_cutoff - cutoff < max_depth){
+                    std::get<1>(move_histories[board_string]).push_back(b->data);
+                }
+            // }
+            std::get<1>(move_histories[board_string]).push_back(b->data);
+            float eval = minimax(b, cutoff - 1, alpha, beta, true,global_cutoff);
+            // if (in_move_hist){
+            //     b->data = present_data;
+            // }
+            // else{
+                undo_last_move(b, m);
+            // }                
             min_eval = std::min(min_eval, eval);
             if (cutoff == global_cutoff && eval < beta)
             {
@@ -448,6 +506,9 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing)
             {
                 break;
             }
+        }
+        if (global_cutoff-cutoff < max_depth){
+            std::get<2>(move_histories[board_string]) = min_eval;
         }
         return min_eval;
     }
@@ -473,16 +534,40 @@ void Engine::find_best_move(const Board &b)
         // }
         // std::cout << std::endl;
         Board *b_copy = new Board(b);
-
         print_moveset(moveset);
         minimax_count = 0;
+        std::chrono::milliseconds per_move(0);
+        BoardType btype = b_copy->data.board_type;
+        if (btype == SEVEN_THREE){
+            per_move = std::chrono::milliseconds(2000);
+        }
+        else if (btype == EIGHT_FOUR){
+            per_move = std::chrono::milliseconds(3000);
+        }
+        else{
+            per_move = std::chrono::milliseconds(4000);
+        }
 
         auto start = std::chrono::high_resolution_clock::now();
-        minimax(b_copy, global_cutoff, std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), b.data.player_to_play == WHITE);
+        int depth = 0;
+        while (true)
+        {
+            std::cout << "iterative depth:" << depth << std::endl;
+            minimax(b_copy, depth, std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), b.data.player_to_play == WHITE,depth);
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::milliseconds duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            if (duration>per_move || depth == 6) //! This condition has to be updated for a better one
+            {
+                break;
+            }
+            depth++;
+        }
+        // minimax(b_copy, global_cutoff, std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), b.data.player_to_play == WHITE);
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::milliseconds duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
         std::cout << "Time taken: " << duration.count() << "ms" << std::endl;
+        std::cout << "Depth covered: " << depth << std::endl;
         std::cout << "get_legal_moves() time taken: " << get_legal_moves_duration.count() << "ms" << std::endl;
         std::cout << "eval_fn() time taken: " << eval_duration.count() << "ms" << std::endl;
         std::cout << "Minimax calls: " << minimax_count << std::endl;
