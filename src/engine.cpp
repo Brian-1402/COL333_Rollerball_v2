@@ -359,7 +359,7 @@ void print_moveset(std::unordered_set<U16> moveset)
 }
 
 U16 best_move_obtained = 0;
-int minimax_count = 0;
+int minimax_count;
 std::chrono::milliseconds get_legal_moves_duration(0);
 std::chrono::milliseconds eval_duration(0);
 
@@ -495,11 +495,16 @@ void Engine::find_best_move(const Board &b)
         auto total_start = std::chrono::high_resolution_clock::now();
         std::chrono::milliseconds total_duration(0);
         std::chrono::milliseconds minimax_duration(0);
+        std::chrono::milliseconds time_for_next_depth(0);
+        int prev_minimax_count = 0;
 
         move_histories.clear();
         int depth = 0;
+        int avg_branch_factor = 0;
+        float alpha = 0.8;
         while (true)
         {
+            prev_minimax_count = minimax_count;
             minimax_count = 0;
             std::cout << "iterative depth:" << depth << std::endl;
             auto start = std::chrono::high_resolution_clock::now();
@@ -509,7 +514,11 @@ void Engine::find_best_move(const Board &b)
             total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - total_start);
             std::cout << "Minimax calls in iterative depth " << depth << ": " << minimax_count << std::endl;
             // std::cout << "Minimax calls per ms: " << (minimax_count) / minimax_duration.count() << std::endl;
-            if (total_duration > per_move || depth == 6) //! This condition has to be updated for a better one
+            if (depth >= 2){
+                avg_branch_factor = (int)(alpha * (minimax_count/prev_minimax_count) + (1-alpha) * avg_branch_factor); //! could make this better by using moving average
+            }
+            time_for_next_depth = avg_branch_factor * minimax_duration;
+            if (total_duration + time_for_next_depth > per_move) //! This condition has to be updated for a better one
             {
                 break;
             }
