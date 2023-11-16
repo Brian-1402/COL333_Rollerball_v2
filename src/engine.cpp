@@ -370,10 +370,10 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
     // bool is_sorted = false;
     if (cutoff == 0)
     {
-        auto start = std::chrono::high_resolution_clock::now();
+        auto eval_start = std::chrono::high_resolution_clock::now();
         float eval = eval_fn(b);
-        auto end = std::chrono::high_resolution_clock::now();
-        eval_duration += std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto eval_end = std::chrono::high_resolution_clock::now();
+        eval_duration += std::chrono::duration_cast<std::chrono::milliseconds>(eval_end - eval_start);
         return eval;
     }
 
@@ -391,10 +391,10 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
     }
     else
     {
-        auto start = std::chrono::high_resolution_clock::now();
+        auto legal_start = std::chrono::high_resolution_clock::now();
         moveset = b->get_legal_moves();
-        auto end = std::chrono::high_resolution_clock::now();
-        get_legal_moves_duration += std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto legal_end = std::chrono::high_resolution_clock::now();
+        get_legal_moves_duration += std::chrono::duration_cast<std::chrono::milliseconds>(legal_end - legal_start);
         if (global_cutoff - cutoff < max_ids_store_depth)
         { // * Only store the moveset if the depth is less than the max_ids_store_depth (to avoid overflow of memory)
             std::vector<BoardData> board_states;
