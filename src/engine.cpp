@@ -515,10 +515,10 @@ void Engine::find_best_move(const Board &b)
             std::cout << "Minimax calls in iterative depth " << depth << ": " << minimax_count << std::endl;
             // std::cout << "Minimax calls per ms: " << (minimax_count) / minimax_duration.count() << std::endl;
             if (depth >= 2){
-                avg_branch_factor = (int)(alpha * (minimax_count/prev_minimax_count) + (1-alpha) * avg_branch_factor); //! could make this better by using moving average
+                avg_branch_factor = (int)(alpha * (minimax_count/prev_minimax_count) + (1-alpha) * avg_branch_factor); // * exponential moving average
             }
             time_for_next_depth = avg_branch_factor * minimax_duration;
-            if (total_duration + time_for_next_depth > per_move) //! This condition has to be updated for a better one
+            if (total_duration + time_for_next_depth > per_move) // * if the time taken for the next depth is more than the time left for the move, break
             {
                 break;
             }
