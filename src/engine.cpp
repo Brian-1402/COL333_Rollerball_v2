@@ -23,7 +23,7 @@ typedef uint8_t U8;
 typedef uint16_t U16;
 
 int max_ids_store_depth = 5;
-std::unordered_map<std::string, std::tuple<std::unordered_set<U16>, std::vector<BoardData>, float>> move_histories; // dictionary storing the present state (board_0 in its string format) and its corresponding moves, board states after moves, and the score of the board state
+std::unordered_map<std::string, std::tuple<std::vector<U16>, std::vector<BoardData>, std::vector<U16>>> state_histories; // dictionary storing the present state (board_0 in its string format) and its corresponding moves, board states after moves, and the score of the board state
 std::vector<std::string> moves_taken;
 std::vector<U8> last_killed_pieces;
 std::vector<int> last_killed_pieces_idx;
@@ -377,28 +377,29 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
         return eval;
     }
 
-    std::unordered_set<U16> moveset;
-    // bool in_move_hist = false;
+    std::vector<U16> moveset;
+    bool in_move_hist = false;
     std::string board_string = board_to_str(&(b->data));
     b->data.player_to_play == WHITE ? board_string += "W" : board_string += "B";
 
     // NOTE: global_cutoff - cutoff gives the present depth of search
-    if (move_histories.find(board_string) != move_histories.end())
+    if (state_histories.find(board_string) != state_histories.end())
     { // * Board state already in dictionary
-        moveset = std::get<0>(move_histories[board_string]);
-        // in_move_hist = true;
+        moveset = std::get<0>(state_histories[board_string]);
+        in_move_hist = true;
         // std::cout << "Board state already in dictionary" << std::endl;
     }
     else
     {
         auto legal_start = std::chrono::high_resolution_clock::now();
-        moveset = b->get_legal_moves();
+        std::unordered_set<U16> legal_moves  = b->get_legal_moves();
+        moveset = std::vector<U16>(legal_moves.begin(), legal_moves.end());
         auto legal_end = std::chrono::high_resolution_clock::now();
         get_legal_moves_duration += std::chrono::duration_cast<std::chrono::milliseconds>(legal_end - legal_start);
         if (global_cutoff - cutoff < max_ids_store_depth)
         { // * Only store the moveset if the depth is less than the max_ids_store_depth (to avoid overflow of memory)
             std::vector<BoardData> board_states;
-            move_histories[board_string] = std::make_tuple(moveset, board_states, 0.0f);
+            state_histories[board_string] = std::make_tuple(moveset, board_states, std::vector<U16>()); //! -> ig this works
         }
     }
 
@@ -408,19 +409,23 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
     }
 
     float best_eval = std::numeric_limits<float>::lowest() * Maximizing + std::numeric_limits<float>::max() * (!Maximizing);
-    for (auto m : moveset)
+    
+    // std::vector<int> best_move_indices = {0,0};
+    
+    for (int i = 0; i < (int) moveset.size(); i++)
     {
+        U16 m = moveset[i];
         // BoardData present_data;
         // if (in_move_hist){
         //     present_data = b->data;
-        //     b->data = std::get<1>(move_histories[board_string])[ind];
+        //     b->data = std::get<1>(state_histories[board_string])[ind];
         //     ind++;
         // }
         // else{
         do_move(b, m);
         // if (global_cutoff - cutoff < max_ids_store_depth)
         // {
-        //     std::get<1>(move_histories[board_string]).push_back(b->data);
+        //     std::get<1>(state_histories[board_string]).push_back(b->data);
         // }
         // }
         float eval = minimax(b, cutoff - 1, alpha, beta, !Maximizing, global_cutoff);
@@ -430,19 +435,19 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
         // else{
         undo_last_move(b, m);
         // }
-        // if (Maximizing)
-        //     best_eval = std::max(best_eval, eval);
-        // else
-        //     best_eval = std::min(best_eval, eval);
         best_eval = std::max(best_eval, eval) * Maximizing + std::min(best_eval, eval) * (!Maximizing);
-        bool prune = ((eval > alpha) && Maximizing) || ((eval < beta) && !Maximizing);
-        if (cutoff == global_cutoff && prune)
+        // if (best_eval == eval){
+        //     best_move_indices[0] = i; //! Not sure if this is completely right -> Hopefully yes
+        // }
+        bool is_better_move = ((eval > alpha) && Maximizing) || ((eval < beta) && !Maximizing);
+        if (cutoff == global_cutoff && is_better_move)
         {
-            best_move_obtained = m;
+            best_move_obtained = m; //! Need to move this to main function
+            // best_move_indices[0] = i; //! Not sure what this does lol
             std::cout << "New best move chosen:" << move_to_str(m) << ", score: " << eval << std::endl;
         }
         if (Maximizing)
-            alpha = std::max(alpha, eval);
+            alpha = std::max(alpha, eval); 
         else
             beta = std::min(beta, eval);
 
@@ -451,7 +456,11 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
     }
     // if (global_cutoff - cutoff < max_ids_store_depth)
     // {
-    //     std::get<2>(move_histories[board_string]) = best_eval;
+    //     // std::get<2>(state_histories[board_string]) = killing_moves;
+    //     U16 temp = moveset[0];
+    //     moveset[0] = moveset[best_move_indices[0]];
+    //     moveset[best_move_indices[0]] = temp;
+    //     std::get<0>(state_histories[board_string]) = moveset;
     // }
     return best_eval;
 }
@@ -498,7 +507,7 @@ void Engine::find_best_move(const Board &b)
         std::chrono::milliseconds time_for_next_depth(0);
         int prev_minimax_count = 0;
 
-        move_histories.clear();
+        state_histories.clear();
         int depth = 0;
         int avg_branch_factor = 0;
         float alpha = 0.8;
