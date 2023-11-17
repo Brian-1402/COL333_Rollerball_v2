@@ -22,7 +22,7 @@
 typedef uint8_t U8;
 typedef uint16_t U16;
 
-int max_ids_store_depth = 5;
+int max_ids_store_depth = 8;
 std::unordered_map<std::string, std::tuple<std::unordered_set<U16>, std::vector<BoardData>, float>> move_histories; // dictionary storing the present state (board_0 in its string format) and its corresponding moves, board states after moves, and the score of the board state
 std::vector<std::string> moves_taken;
 std::vector<U8> last_killed_pieces;
@@ -159,7 +159,7 @@ float material_check(Board *b)
     return val;
 }
 
-float check_condition(Board *b)
+float check_condition(Board *b, int cutoff)
 {
     //
     float val = 0;
@@ -170,100 +170,8 @@ float check_condition(Board *b)
         val = 10 * std::pow(-1, int(player));
         if (b->get_legal_moves().size() == 0) // if you're checkmated
         {
-            val += 500 * std::pow(-1, int(player));
+            val += 500 * std::pow(-1, int(player)) * (1 + cutoff);
         }
-    }
-    return val;
-}
-
-// Calculates how ranges covered + threats given
-float range_check(Board *b)
-{
-    bool player = (b->data.player_to_play == WHITE);
-    float val = 0;
-    // float p = 2, bi = 4, r = 6;
-    // U8 *pieces = (U8 *)(&(b->data));
-
-    // b->data.player_to_play = (PlayerColor)(b->data.player_to_play ^ (WHITE | BLACK)); // flipping player
-    std::unordered_set<U16> moves = b->get_legal_moves();
-    // b->data.player_to_play = (PlayerColor)(b->data.player_to_play ^ (WHITE | BLACK)); // flipping player back so as to not interfere with remaining processes
-
-    // moves = (player == 1) ? moves : moves_flip; //White's moves
-    // moves_flip = (player == 0) ? moves : moves_flip; //Black's moves
-
-    val += (moves.size()) * pow(-1, player); // Calculates range (always white - black)
-
-    /*Taking union -> Note: we dont need to care about coinciding positions because if there existed coinciding
-    positions it implies there was no oponent piece in that square in first place */
-    // moves.insert(moves_flip.begin(), moves_flip.end());
-
-    // // Calculating threats
-    // for (auto m : moves)
-    // {
-    //     U8 p1 = getp1(m);
-    //     for (int i = 0; i < 12; i++)
-    //     {
-    //         int temp = 0;
-    //         if (pieces[i] == p1)
-    //         {
-    //             // val += (((int(i >= 6) - int(i < 6))) * weight_arr[i])* (pieces[i] != DEAD);
-    //             U8 piecetype = b->data.board_0[pieces[i]];
-    //             temp += ((piecetype & PAWN) == PAWN) * p;
-    //             temp += ((piecetype & BISHOP) == BISHOP) * bi;
-    //             temp += ((piecetype & ROOK) == ROOK) * r;
-    //             temp *= std::pow(-1, (piecetype & BLACK) == BLACK);
-    //         }
-    //         val += temp * threat_weight;
-    //     }
-    // }
-    return val;
-}
-
-float pawn_distance(Board *b)
-{
-    float val = 0;
-    // the below are the proper non-overlapping sector regions.
-    std::unordered_set<U8> bottom({1, 2, 3, 4, 5, 6, 10, 11, 12, 13});
-    std::unordered_set<U8> left({0, 8, 16, 24, 32, 40, 9, 17, 25, 33});
-    std::unordered_set<U8> top({48, 49, 50, 51, 52, 53, 41, 42, 43, 44});
-    std::unordered_set<U8> right({54, 46, 38, 30, 22, 14, 45, 37, 29, 21});
-    U8 corners[4] = {pos(5, 1), pos(1, 1), pos(1, 5), pos(5, 5)};
-    U8 *pieces = (U8 *)(&(b->data));
-
-    int ids[4] = {4, 5, 10, 11};
-    for (int i = 0; i < 4; i++) // for each piece
-    {
-        std::bitset<4> piece_arr;
-        std::bitset<4> king_arr;
-        U8 piece_pos = pieces[ids[i]];
-        U8 king_pos = pieces[(i > 5) * 2 + (i <= 5) * 8];
-        U8 piecetype = b->data.board_0[piece_pos];
-
-        if (piece_pos == DEAD || (piecetype & PAWN) != PAWN)
-            continue;
-        piece_arr[0] = bottom.count(piece_pos);
-        piece_arr[1] = left.count(piece_pos);
-        piece_arr[2] = top.count(piece_pos);
-        piece_arr[3] = right.count(piece_pos);
-        king_arr[0] = bottom.count(king_pos);
-        king_arr[1] = left.count(king_pos);
-        king_arr[2] = top.count(king_pos);
-        king_arr[3] = right.count(king_pos);
-        int sector_dist = (int)std::log2((piece_arr.to_ulong() << 4) / king_arr.to_ulong()) % 4;
-        int piece_c = 0;
-        int king_c = 0;
-        for (int i = 0; i < 4; i++)
-        {
-            piece_c += (int)piece_arr[i] * corners[i];
-            king_c += (int)king_arr[i] * corners[i];
-        }
-        int piece_dist = std::abs(getx(piece_pos) - getx(piece_c)) + std::abs(gety(piece_pos) - gety(piece_c));
-        int king_dist = std::abs(getx(king_pos) - getx(king_c)) + std::abs(gety(king_pos) - gety(king_c));
-        int diff = king_dist - piece_dist;
-        if (diff < 0)
-            diff += 40;
-        int total_dist = diff + 4 * sector_dist;
-        val -= total_dist * std::pow(-1, (piecetype & BLACK) == BLACK);
     }
     return val;
 }
@@ -271,62 +179,41 @@ float pawn_distance(Board *b)
 float rook_distance(Board *b)
 {
     float val = 0;
-    // std::unordered_set<U8> bottom({1, 2, 3, 4, 5, 6, 10, 11, 12, 13});
-    // std::unordered_set<U8> left({0, 8, 16, 24, 32, 40, 9, 17, 25, 33});
-    // std::unordered_set<U8> top({48, 49, 50, 51, 52, 53, 41, 42, 43, 44});
-    // std::unordered_set<U8> right({54, 46, 38, 30, 22, 14, 45, 37, 29, 21});
-
-    std::unordered_set<U8> bottom_r({2, 3, 4, 5, 6, 10, 11, 12, 13, 14});
-    std::unordered_set<U8> left_r({0, 1, 8, 9, 16, 24, 32, 17, 25, 33});
-    std::unordered_set<U8> top_r({50, 51, 52, 42, 43, 44, 40, 41, 48, 49});
-    std::unordered_set<U8> right_r({54, 46, 38, 30, 22, 14, 45, 37, 29, 21});
-
-    std::unordered_set<U8> bottom_l({0, 1, 8, 9, 2, 3, 4, 10, 11, 12});
-    std::unordered_set<U8> left_l({40, 41, 48, 49, 16, 24, 32, 17, 25, 33});
-    std::unordered_set<U8> top_l({45, 46, 53, 54, 50, 51, 52, 42, 43, 44});
-    std::unordered_set<U8> right_l({5, 6, 13, 14, 38, 30, 22, 37, 29, 21});
     U8 *pieces = (U8 *)(&(b->data));
-
-    int ids[8] = {0, 1, 4, 5, 6, 7, 10, 11}; // iterate through rooks and pawns(maybe upgraded)
-    for (int i = 0; i < 8; i++)
+    int ids[12] = {0, 1, 10, 11, 6, 7, 8, 9, 16, 17, 18, 19}; // iterate through rooks and pawns(maybe upgraded)
+    for (int i = 0; i < 12; i++)
     {
-        std::bitset<4> piece_arr;
-        std::bitset<4> king_arr;
         U8 piece_pos = pieces[ids[i]];
-        U8 king_pos = pieces[(i > 5) * 2 + (i <= 5) * 8];
-        U8 piecetype = b->data.board_0[piece_pos];
-
-        if (piece_pos == DEAD || (piecetype & ROOK) != ROOK)
+        U8 piecetype = b->data.board_0[piece_pos]; // whether it is a rook or a pawn
+        if (piece_pos == DEAD)                     // || (piecetype & ROOK) != ROOK) // if it is not a rook, skip
             continue;
-        piece_arr[0] = bottom_r.count(piece_pos);
-        piece_arr[1] = left_r.count(piece_pos);
-        piece_arr[2] = top_r.count(piece_pos);
-        piece_arr[3] = right_r.count(piece_pos);
-        king_arr[0] = bottom_l.count(king_pos);
-        king_arr[1] = left_l.count(king_pos);
-        king_arr[2] = top_l.count(king_pos);
-        king_arr[3] = right_l.count(king_pos);
-        int sector_dist = 0;
-        if ((piece_arr.to_ulong() & piece_arr.to_ulong()) > 0)
-            sector_dist = 5;
-        else
-            sector_dist = (int)std::log2((piece_arr.to_ulong() << 4) / king_arr.to_ulong()) % 4; // 0 to 3
+        U8 opp_king_pos = pieces[(i > 9) * 2 + (i <= 9) * 12]; // pos of opp king according to the rook color
 
-        // std::cout << "rook:" << rook_arr.to_ulong() << "king:" << king_arr.to_ulong() << "\n";
+        int piece_sector = b->data.board_mask[piece_pos] - 2; // find rook's orientation in the board.
+        // 0 for bottom, 1 for left, 2 for top, 3 for right
+        const U8 *inv_transform = b->data.inverse_transform_array[piece_sector];
 
-        val -= 8 * sector_dist * std::pow(-1, (piecetype & BLACK) == BLACK);
+        piece_pos = inv_transform[piece_pos];       // transform positions to make it to bottom row
+        opp_king_pos = inv_transform[opp_king_pos]; // corresponding transform for opp_king
+        piece_sector = (b->data.board_mask)[piece_pos];
+        int king_sector = (b->data.board_mask)[opp_king_pos];
+
+        int sector_dist = king_sector - piece_sector;                 // values 0-3. higher means king is further to the rook. higher -> bad for white rook, good for black rook
+        if (sector_dist == 0 && getx(piece_pos) < getx(opp_king_pos)) // if they're in the same sector but king is behind the piece, then bad for white rook, and equivalent to having even more distance.
+            sector_dist = 4;
+        val += 8 * (4 - sector_dist) * std::pow(-1, (piecetype & BLACK) == BLACK);
     }
     return val;
 }
 
-float eval_fn(Board *b)
+float eval_fn(Board *b, int cutoff)
 {
     float final_val = 0;
     final_val += 1 * material_check(b);
-    final_val += 1 * check_condition(b);
+    final_val += 1 * check_condition(b, cutoff);
     // final_val += 0.1 * range_check(b);
     // final_val += 0.01 * pawn_distance(b);
-    // final_val += 0.02 * rook_distance(b);
+    final_val += 0.02 * rook_distance(b);
     return final_val;
 }
 
@@ -371,7 +258,7 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
     if (cutoff == 0)
     {
         auto eval_start = std::chrono::high_resolution_clock::now();
-        float eval = eval_fn(b);
+        float eval = eval_fn(b, cutoff);
         auto eval_end = std::chrono::high_resolution_clock::now();
         eval_duration += std::chrono::duration_cast<std::chrono::milliseconds>(eval_end - eval_start);
         return eval;
@@ -402,9 +289,10 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
         }
     }
 
+    // * Under the assumption that this if statement is entered only in a game over move
     if (moveset.size() == 0)
     {
-        return eval_fn(b);
+        return eval_fn(b, cutoff);
     }
 
     float best_eval = std::numeric_limits<float>::lowest() * Maximizing + std::numeric_limits<float>::max() * (!Maximizing);
@@ -514,8 +402,9 @@ void Engine::find_best_move(const Board &b)
             total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - total_start);
             std::cout << "Minimax calls in iterative depth " << depth << ": " << minimax_count << std::endl;
             // std::cout << "Minimax calls per ms: " << (minimax_count) / minimax_duration.count() << std::endl;
-            if (depth >= 2){
-                avg_branch_factor = (int)(alpha * (minimax_count/prev_minimax_count) + (1-alpha) * avg_branch_factor); // * exponential moving average
+            if (depth >= 2)
+            {
+                avg_branch_factor = (int)(alpha * (minimax_count / prev_minimax_count) + (1 - alpha) * avg_branch_factor); // * exponential moving average
             }
             time_for_next_depth = avg_branch_factor * minimax_duration;
             if (total_duration + time_for_next_depth > per_move) // * if the time taken for the next depth is more than the time left for the move, break
