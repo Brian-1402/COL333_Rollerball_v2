@@ -28,65 +28,6 @@ std::vector<std::string> moves_taken;
 std::vector<U8> last_killed_pieces;
 std::vector<int> last_killed_pieces_idx;
 
-
-bool under_threat(Board *b,U8 piece_pos)  {
-
-    auto pseudolegal_moves = b->get_pseudolegal_moves_for_side(b->data.player_to_play ^ (WHITE | BLACK));
-
-    for (auto move : pseudolegal_moves) {
-        // std::cout << move_to_str(move) << " ";
-        if (getp1(move) == piece_pos) {
-            // std::cout << "<- causes check\n";
-            return true;
-        }
-    }
-    // std::cout << std::endl;
-
-    return false;
-}
-
-bool in_check(Board *b)  {
-
-    auto king_pos = b->data.w_king;
-    if (b->data.player_to_play == BLACK) {
-        king_pos = b->data.b_king;
-    }
-
-    return under_threat(b,king_pos);
-}
-
-std::unordered_set<U16> get_pseudolegal_moves(Board *b)  {
-    return b->get_pseudolegal_moves_for_side(b->data.player_to_play);
-}
-
-
-// legal move generation:
-// Get all pseudolegal moves
-// for each pseudolegal move for our color:
-//     if doing this move will leave the king in threat from opponent's pieces
-//         don't add the move to legal moves
-//     else
-//         add to legal moves
-std::unordered_set<U16> get_legal_moves(Board *b)  {
-
-    // Board c(*b);
-    auto pseudolegal_moves = get_pseudolegal_moves(b);
-    std::unordered_set<U16> legal_moves;
-
-    for (auto move : pseudolegal_moves) {
-        b->do_move_without_flip_(move);
-
-        if (!in_check(b)) {
-            legal_moves.insert(move);
-        }
-
-        b->undo_last_move_without_flip_(move);
-    }
-
-    std::cout << "Using this legal move" << std::endl;
-    return legal_moves;
-}
-
 void do_move(Board *b, U16 move)
 
 {
