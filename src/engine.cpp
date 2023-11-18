@@ -24,6 +24,7 @@ typedef uint16_t U16;
 
 int max_ids_store_depth = 8;
 std::unordered_map<std::string, std::unordered_set<U16>> move_histories; // dictionary storing the present state (board_0 in its string format) and its corresponding moves, board states after moves, and the score of the board state
+std::vector<std::unordered_map<std::string, std::unordered_set<U16>>> psl_move_history(2); // Index 0 would store the psl of parents layer and index 1 would store psl of children layer
 std::vector<std::string> moves_taken;
 std::vector<U8> last_killed_pieces;
 std::vector<int> last_killed_pieces_idx;
@@ -31,7 +32,11 @@ std::vector<int> last_killed_pieces_idx;
 
 bool under_threat(Board *b,U8 piece_pos)  {
 
+    std::string board_string = board_to_str(&(b->data));
+    b->data.player_to_play == WHITE ? board_string += "B" : board_string += "W"; //flipped since we are now gonna calculated get_pseudolegal_moves_for_side for the opponent
+
     auto pseudolegal_moves = b->get_pseudolegal_moves_for_side(b->data.player_to_play ^ (WHITE | BLACK));
+    psl_move_history[1][board_string] = pseudolegal_moves;
 
     for (auto move : pseudolegal_moves) {
         // std::cout << move_to_str(move) << " ";
@@ -70,7 +75,18 @@ std::unordered_set<U16> get_pseudolegal_moves(Board *b)  {
 std::unordered_set<U16> get_legal_moves(Board *b)  {
 
     // Board c(*b);
-    auto pseudolegal_moves = get_pseudolegal_moves(b);
+    std::unordered_set<U16> pseudolegal_moves;
+    std::string board_string = board_to_str(&(b->data));
+    b->data.player_to_play == WHITE ? board_string += "W" : board_string += "B";
+
+    if (psl_move_history[0].find(board_string) != psl_move_history[0].end())
+        { // * Board state already in dictionary
+        pseudolegal_moves = psl_move_history[0][board_string];
+    }
+    else{
+        pseudolegal_moves = get_pseudolegal_moves(b);
+        psl_move_history[0][board_string] = pseudolegal_moves;
+    }
     std::unordered_set<U16> legal_moves;
 
     for (auto move : pseudolegal_moves) {
@@ -79,11 +95,16 @@ std::unordered_set<U16> get_legal_moves(Board *b)  {
         if (!in_check(b)) {
             legal_moves.insert(move);
         }
+        else{
+            std::string board_string_opp = board_to_str(&(b->data));
+            b->data.player_to_play == WHITE ? board_string_opp += "B" : board_string_opp += "W"; //flipped since we are now gonna calculated get_pseudolegal_moves_for_side for the opponent
+            psl_move_history[1].erase(board_string_opp);
+        }
 
         b->undo_last_move_without_flip_(move);
     }
 
-    std::cout << "Using this legal move" << std::endl;
+    // std::cout << "Using this legal move" << std::endl;
     return legal_moves;
 }
 
@@ -223,11 +244,11 @@ float check_condition(Board *b, int cutoff)
     //
     float val = 0;
     bool player = (b->data.player_to_play == WHITE); // current player
-    if (b->in_check())
+    if (in_check(b))
     {
         // if white is in check, bad, negative
         val = 10 * std::pow(-1, int(player));
-        if (b->get_legal_moves().size() == 0) // if you're checkmated
+        if (get_legal_moves(b).size() == 0) // if you're checkmated
         {
             val += 500 * std::pow(-1, int(player)) * (1 + cutoff);
         }
@@ -338,7 +359,9 @@ float minimax(Board *b, int cutoff, float alpha, float beta, bool Maximizing, in
     else
     {
         auto legal_start = std::chrono::high_resolution_clock::now();
-        moveset = b->get_legal_moves();
+        moveset = get_legal_moves(b);
+        // if (moveset != b->get_legal_moves())
+        //     std::cout << "Fast legal moves failed" << std::endl;
         auto legal_end = std::chrono::high_resolution_clock::now();
         get_legal_moves_duration += std::chrono::duration_cast<std::chrono::milliseconds>(legal_end - legal_start);
         if (global_cutoff - cutoff < max_ids_store_depth)
@@ -445,6 +468,8 @@ void Engine::find_best_move(const Board &b)
         int prev_minimax_count = 0;
 
         move_histories.clear();
+        psl_move_history[0].clear();
+        psl_move_history[1].clear();
         int depth = 0;
         int avg_branch_factor = 0;
         float alpha = 0.8;
@@ -459,8 +484,10 @@ void Engine::find_best_move(const Board &b)
             minimax_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
             total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - total_start);
             std::cout << "Minimax calls in iterative depth " << depth << ": " << minimax_count << std::endl;
+            psl_move_history[0] = psl_move_history[1];
+            psl_move_history[1].clear();
             // std::cout << "Minimax calls per ms: " << (minimax_count) / minimax_duration.count() << std::endl;
-            if (depth >= 6)
+            if (depth >= 5)
             {
                 avg_branch_factor = (int)(alpha * (minimax_count / prev_minimax_count) + (1 - alpha) * avg_branch_factor); // * exponential moving average
             }
